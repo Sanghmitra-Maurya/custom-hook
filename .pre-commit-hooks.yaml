@@ -1,0 +1,10 @@
+- id: check-sonar-quality-gate
+  name: Check SonarQube Quality Gate
+  entry: check-sonar-quality-gate
+  language: python
+  pass_filenames: false
+- id: audit-setup
+  name: Audit Hook Installer
+  entry: audit-setup
+  language: python
+  pass_filenames: false
