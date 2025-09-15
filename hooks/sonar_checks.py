@@ -33,7 +33,7 @@ class SonarQubeCheck:
                 f"-Dsonar.host.url={self.sonar_host}",
                 f"-Dsonar.login={self.sonar_token}",
                 "-Dsonar.exclusions=venv/**",
-                "-Dsonar.inclusions=**/*.py",
+                # "-Dsonar.inclusions=**/*.py",
                 "-Dsonar.python.coverage.reportPaths=coverage.xml"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -253,7 +253,7 @@ def main():
         print("SONAR_TOKEN not found in environment.")
         exit(1)
 
-    sonar = SonarQubeCheck("http://localhost:9000", "samplePOC", sonar_token)
+    sonar = SonarQubeCheck("http://localhost:9000", "POC_JS", sonar_token)
 
     try:
         output = sonar.run_analysis()
