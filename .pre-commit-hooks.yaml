@@ -8,3 +8,8 @@
   entry: audit-setup
   language: python
   pass_filenames: false
+- id: aqd-review
+  name: AQD Full Project Scan
+  entry: aqd-review
+  language: python
+  pass_filenames: false
