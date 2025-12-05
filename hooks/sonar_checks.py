@@ -33,7 +33,7 @@ class SonarQubeCheck:
                 f"-Dsonar.host.url={self.sonar_host}",
                 f"-Dsonar.login={self.sonar_token}",
                 "-Dsonar.exclusions=venv/**",
-                # "-Dsonar.inclusions=**/*.py",
+                "-Dsonar.inclusions=**/*.py",
                 "-Dsonar.python.coverage.reportPaths=coverage.xml"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -272,7 +272,7 @@ def main():
         with open(".git/.sonar_task_status", "w") as f:
             f.write(f"{ce_task_id}:{qg_status}")
         if qg_status != "OK":
-            sonar.give_code_suggestions(error_list)
+            # sonar.give_code_suggestions(error_list)
             exit(1)
     except Exception as e:
         print(f"Exception occurred: {e}")
