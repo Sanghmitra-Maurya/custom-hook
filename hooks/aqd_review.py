@@ -1,7 +1,6 @@
 import keyboard
 import time
 
-
 def main():
     time.sleep(3)
 
@@ -10,7 +9,11 @@ def main():
 
     time.sleep(5)
 
-    keyboard.write("review workspace")
+    text = """Conduct a comprehensive full project code review analyzing all security vulnerabilities, code quality issues, best practices violations, infrastructure security, dependency risks, and performance concerns across the entire codebase.
+    Show all issues in Code issues panel."""
+    
+    # Write the entire text as one prompt (replace newlines with spaces)
+    keyboard.write(text.replace('\n', ' ').replace('\r', ' '))
     keyboard.press_and_release('enter')
 
 
