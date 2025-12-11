@@ -253,7 +253,7 @@ def main():
         print("SONAR_TOKEN not found in environment.")
         exit(1)
 
-    sonar = SonarQubeCheck("http://localhost:9000", "VS_code_extension", sonar_token)
+    sonar = SonarQubeCheck("http://localhost:9000", "thermo_demo", sonar_token)
 
     try:
         output = sonar.run_analysis()
