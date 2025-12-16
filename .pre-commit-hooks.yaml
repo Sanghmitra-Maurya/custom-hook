@@ -1,8 +1,48 @@
+- id: pydocstyle
+  name: pydocstyle docstring checker
+  entry: pydocstyle
+  language: python
+  pass_filenames: false
+- id: trailing-whitespace
+  name: Remove Trailing Whitespace
+  entry: trailing-whitespace
+  language: python
+  types: [text]
+  pass_filenames: true
+- id: end-of-file-fixer
+  name: Ensure End of File
+  entry: end-of-file-fixer
+  language: python
+  pass_filenames: true
 - id: check-sonar-quality-gate
   name: Check SonarQube Quality Gate
   entry: check-sonar-quality-gate
   language: python
   pass_filenames: false
+- id: check-sonar-quality-gate-python
+  name: Check SonarQube Quality Gate (Python)
+  entry: check-sonar-quality-gate
+  language: python
+  pass_filenames: false
+  args: ["python"]
+- id: check-sonar-quality-gate-js
+  name: Check SonarQube Quality Gate (JavaScript)
+  entry: check-sonar-quality-gate
+  language: python
+  pass_filenames: false
+  args: ["javascript"]
+- id: check-sonar-quality-gate-ts
+  name: Check SonarQube Quality Gate (TypeScript)
+  entry: check-sonar-quality-gate
+  language: python
+  pass_filenames: false
+  args: ["typescript"]
+- id: check-sonar-quality-gate-java
+  name: Check SonarQube Quality Gate (Java)
+  entry: check-sonar-quality-gate
+  language: python
+  pass_filenames: false
+  args: ["java"]
 - id: audit-setup
   name: Audit Hook Installer
   entry: audit-setup

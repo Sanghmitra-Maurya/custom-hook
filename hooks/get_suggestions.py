@@ -39,3 +39,4 @@ def get_code_suggestion_from_error(prompt: str) -> str:
 
     except Exception as e:
         return f"[Error contacting Hugging Face Novita API]: {repr(e)}"
+

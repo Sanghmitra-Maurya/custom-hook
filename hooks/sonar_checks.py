@@ -4,14 +4,18 @@ import requests
 import time
 import re
 import os
-from hooks.get_suggestions import get_code_suggestion_from_error
+import yaml
 from hooks.setup_details import get_decrypted_tokens
+from hooks.language_config import get_language_config, get_supported_languages
 
 class SonarQubeCheck:
-    def __init__(self, host, project_key, token):
+    def __init__(self, host, project_key, encrypted_token, language="project-default", sonar_config=None):
         self.sonar_host = host
         self.project_key = project_key
-        self.sonar_token = token
+        self.encrypted_token = encrypted_token
+        self.language = language
+        self.sonar_config = sonar_config or {}
+        self.lang_config = get_language_config(language)
         self.issue_counts = {
             "blocker": 0,
             "critical": 0,
@@ -21,27 +25,92 @@ class SonarQubeCheck:
         }
         self.hospots_count = 0
 
+    def _get_auth_token(self):
+        """Decrypt token only when needed for API calls."""
+        from .setup_details import decrypt_token
+        return decrypt_token(self.encrypted_token)
+
+    def _get_coverage_property_key(self):
+        """Determine coverage property key from sonar config."""
+        # Check for specific coverage properties in sonar config
+        for key in self.sonar_config.keys():
+            if 'coverage' in key.lower() and 'reportpaths' in key.lower():
+                return key
+        return None
+
+    def _get_coverage_path(self):
+        """Get coverage path from sonar config."""
+        for key, value in self.sonar_config.items():
+            if 'coverage' in key.lower() and 'reportpaths' in key.lower() and value:
+                return value
+        return ''
+
+    def _add_default_config(self, cmd):
+        """Add default hook configuration to command."""
+        sources = self.sonar_config.get('sources', '.')
+        exclusions = self.sonar_config.get('exclusions', '')
+        tests = self.sonar_config.get('tests', '')
+        test_inclusions = self.sonar_config.get('test_inclusions', '')
+       
+        cmd.extend([
+            f"-Dsonar.sources={sources}",
+            f"-Dsonar.exclusions={exclusions}" if exclusions else "-Dsonar.exclusions=",
+        ])
+       
+        if tests:
+            cmd.append(f"-Dsonar.tests={tests}")
+        if test_inclusions:
+            cmd.append(f"-Dsonar.test.inclusions={test_inclusions}")
+       
+        coverage_path = self._get_coverage_path()
+        if coverage_path and os.path.exists(coverage_path):
+            coverage_key = self._get_coverage_property_key()
+            if coverage_key:
+                cmd.append(f"-D{coverage_key}={coverage_path}")
+
+    def _add_language_config(self, cmd):
+        """Add language-specific configuration to command."""
+        cmd.extend([
+            "-Dsonar.sources=.",
+            f"-Dsonar.exclusions={self.lang_config['exclusions']}",
+            f"-Dsonar.inclusions={self.lang_config['inclusions']}"
+        ])
+       
+        coverage_path = self.lang_config['coverage_paths']
+        if coverage_path and os.path.exists(coverage_path):
+            coverage_map = {
+                "python": f"-Dsonar.python.coverage.reportPaths={coverage_path}",
+                "javascript": f"-Dsonar.javascript.lcov.reportPaths={coverage_path}",
+                "typescript": f"-Dsonar.javascript.lcov.reportPaths={coverage_path}",
+                "java": f"-Dsonar.coverage.jacoco.xmlReportPaths={coverage_path}"
+            }
+            if self.language in coverage_map:
+                cmd.append(coverage_map[self.language])
 
     # 1. Run the analysis
     def run_analysis(self):
-        print("Starting sonar-scanner analysis...")
+        print(f"Starting sonar-scanner analysis for {self.language}...")
         try:
-            result = subprocess.run(
-                ["sonar-scanner.bat",
+            cmd = [
+                "sonar-scanner.bat",
                 f"-Dsonar.projectKey={self.project_key}",
-                "-Dsonar.sources=.",
                 f"-Dsonar.host.url={self.sonar_host}",
-                f"-Dsonar.login={self.sonar_token}",
-                "-Dsonar.exclusions=venv/**",
-                "-Dsonar.inclusions=**/*.py",
-                "-Dsonar.python.coverage.reportPaths=coverage.xml"],
+                f"-Dsonar.login={self._get_auth_token()}"
+            ]
+           
+            if self.language == "project-default":
+                print("Using configuration from sonar properties file")
+                self._add_default_config(cmd)
+            else:
+                self._add_language_config(cmd)
+
+            result = subprocess.run(
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 check=True
             )
-            print("Analysis triggered.")
-
             return result.stdout
         except subprocess.CalledProcessError as e:
             print("Error running sonar-scanner:")
@@ -64,7 +133,7 @@ class SonarQubeCheck:
 
         while True:
             try:
-                resp = requests.get(url, auth=(self.sonar_token, ""))
+                resp = requests.get(url, auth=(self._get_auth_token(), ""), timeout=30)
                 if resp.status_code == 200:
                     task = resp.json().get('task', {})
                     status = task.get('status')
@@ -93,7 +162,7 @@ class SonarQubeCheck:
         error_list = []
         error_msgs = []
 
-        resp = requests.get(issues_url, auth=(self.sonar_token, ""))
+        resp = requests.get(issues_url, auth=(self._get_auth_token(), ""), timeout=30)
 
         if resp.status_code == 200:
             issues = resp.json().get('issues', [])
@@ -136,7 +205,7 @@ class SonarQubeCheck:
         else:
             print("Failed to fetch issues.")
             print(resp.text)
-        
+       
         return error_msgs
 
     # Step 4: Get Security Hotspots
@@ -148,7 +217,7 @@ class SonarQubeCheck:
             f"&ps=100"
         )
 
-        hotspots_resp = requests.get(hotspots_url, auth=(self.sonar_token, ""))
+        hotspots_resp = requests.get(hotspots_url, auth=(self._get_auth_token(), ""), timeout=30)
 
         if hotspots_resp.status_code == 200:
             hotspots = hotspots_resp.json().get('hotspots', [])
@@ -163,7 +232,7 @@ class SonarQubeCheck:
                     component = hotspot.get('component', '').split(":")[-1]
                     line = hotspot.get('line', 'N/A')
                     print(f"{idx}. [{severity}] {component}:{line} — {message}\n")
-                
+               
         else:
             print("Failed to fetch security hotspots.")
             print(hotspots_resp.text)
@@ -171,7 +240,7 @@ class SonarQubeCheck:
     # 5. Fetch the Quality Gate Status
     def fetch_quality_gate_status(self):
         qg_url = f"{self.sonar_host}/api/qualitygates/project_status?projectKey={self.project_key}"
-        resp = requests.get(qg_url, auth=(self.sonar_token, ""))
+        resp = requests.get(qg_url, auth=(self._get_auth_token(), ""), timeout=30)
 
         if resp.status_code == 200:
             status = resp.json()['projectStatus']['status']
@@ -179,81 +248,86 @@ class SonarQubeCheck:
             return status
         else:
             print("\nFailed to fetch quality gate status.")
-            return 
-    
+            return
+   
+
+   
     # 6. Generate JSON report for UI
-    def generate_json_report(self, qg_status):
-        report = {
-        "status": "success" if qg_status == "OK" else "failed",
-        "issues": self.issue_counts,
-        "security_hotspots": self.hospots_count
-        }
-        with open("sonar-result.json", "w") as f:
-            json.dump(report, f, indent=2)
-    
-    def get_code_context(self, file_path, line_num, context_lines=3):
-        try:
-            with open(file_path, "r") as f:
-                lines = f.readlines()
-                start = max(0, line_num - context_lines - 1)
-                end = min(len(lines), line_num + context_lines)
-
-                # Highlight the target line with a comment
-                context_snippet = ""
-                for i in range(start, end):
-                    line = lines[i].rstrip("\n")
-                    if i == line_num - 1:
-                        context_snippet += f">>> {line}   # <-- Issue reported here\n"
+    def generate_json_report(self, qg_status, configured_hooks):
+        report_file = "sonar-result.json"
+       
+        # Only generate report if current language is in configured hooks
+        if configured_hooks and self.language not in configured_hooks:
+            print(f"\nSkipping report generation for {self.language} - not configured in .pre-commit-config.yaml")
+            return
+       
+        # Load existing report if it exists
+        existing_report = {"languages": {}}
+        if os.path.exists(report_file):
+            try:
+                with open(report_file, "r") as f:
+                    loaded_report = json.load(f)
+                    # Ensure 'languages' key exists, recreate if corrupted
+                    if "languages" not in loaded_report:
+                        print(f"\nCorrupted {report_file} found (missing 'languages' key), creating new file")
+                        existing_report = {"languages": {}}
                     else:
-                        context_snippet += f"    {line}\n"
-                return context_snippet
-
-        except Exception as e:
-            print(f"[Error reading file: {e}]")
-            return None
-
-    def give_code_suggestions(self, error_items):
-        print(f"\n{'='*40} AI Suggestions {'='*40}\n")
-        for idx, item in enumerate(error_items, start=1):
-            file_path = item['file']
-            line_num = item['line']
-            if line_num is None:
-                print(f"Skipping sugestion for file: {file_path} - Line info missing")
-                continue
-
-            context_code = self.get_code_context(file_path, line_num)
-            if context_code is None:
-                print(f"Skipping suggestion for file: {file_path} - Unable to fetch code context")
-                continue
-
-            prompt = (
-                f"Issue: {item['full_error']}\n"
-                f"Code context from {file_path} around line {line_num}:\n"
-                f"{context_code}\n"
-                "- Please suggest a fix for this issue:\n"
-                "- Focus only on the line on which issue us occured (denoted by # <-- Issue reported here), avoid giving suggestions for other lines unless mandatory.\n"
-                "- Provide one complete and precise solution.\n"
-                "- Always check syntax, type mismatch, etc before providing final solution.\n"
-                "- Try to answer in one paragraph only, strictly keep only 3 sections, ##Cause, ##Resolution/Changes needed, ##Sample Code.\n"
-                "- Clearly mention what should be removed, changed, or added.\n"
-                "- Avoid generic advice; tailor your suggestion to the actual context.\n"
-                "- Assume the code is part of a production pipeline — avoid insecure practices like hardcoding credentials.\n"
-            )
-            
-            suggestion = get_code_suggestion_from_error(prompt)
-            print(f"{idx}. {item['full_error']}\n")
-            print(f"Code Snippet:\n{context_code}")
-            print(f"AI Suggestion:\n{suggestion}\n")
-
+                        existing_report = loaded_report
+            except (json.JSONDecodeError, KeyError) as e:
+                print(f"\nError reading {report_file}: {e}, creating new file")
+                existing_report = {"languages": {}}
+       
+        # Remove languages not in configured hooks
+        if configured_hooks:
+            existing_report["languages"] = {k: v for k, v in existing_report["languages"].items() if k in configured_hooks}
+       
+        # Add current language results
+        existing_report["languages"][self.language] = {
+            "status": "success" if qg_status == "OK" else "failed",
+            "issues": self.issue_counts,
+            "security_hotspots": self.hospots_count
+        }
+       
+        # Write updated report
+        with open(report_file, "w") as f:
+            json.dump(existing_report, f, indent=2)
+       
+        return existing_report
 
 def main():
+    import sys
+    from .sonar_config import SonarConfig
+   
     tokens = get_decrypted_tokens()
     sonar_token = tokens["SONAR_TOKEN"]
     if not sonar_token:
         print("SONAR_TOKEN not found in environment.")
         exit(1)
 
-    sonar = SonarQubeCheck("http://localhost:9000", "code-enforser-demo", sonar_token)
+    # Get language from command line args or default to "default"
+    language = "project-default"  # project-default hook
+    if len(sys.argv) > 1:
+        specified_lang = sys.argv[1].lower()
+        if specified_lang in get_supported_languages():
+            language = specified_lang
+        else:
+            print(f"Unsupported language: {specified_lang}")
+            print(f"Supported languages: {', '.join(get_supported_languages())}")
+            exit(1)
+
+    # Load configuration using SonarConfig
+    config_manager = SonarConfig()
+    config = config_manager.load_config(sonar_token)
+   
+    # Print config summary only for first language
+    if not os.path.exists(".git/.sonar_config_printed"):
+        config_manager.print_defaults_summary()
+        with open(".git/.sonar_config_printed", "w") as f:
+            f.write("printed")
+   
+    # Pass sonar_config for project-default hook, None for others
+    sonar_config = config if language == "project-default" else None
+    sonar = SonarQubeCheck(config['host'], config['project_key'], config['token'], language, sonar_config)
 
     try:
         output = sonar.run_analysis()
@@ -267,16 +341,30 @@ def main():
         sonar.fetch_hotspots()
 
         qg_status = sonar.fetch_quality_gate_status()
-        sonar.generate_json_report(qg_status)
+        sonar.generate_json_report(qg_status, config['configured_hooks'])
 
         with open(".git/.sonar_task_status", "w") as f:
             f.write(f"{ce_task_id}:{qg_status}")
+       
+        # Clear cache if this is the last hook to execute
+        _clear_cache_if_last_hook(config_manager, config['configured_hooks'], language)
+       
         if qg_status != "OK":
-            # sonar.give_code_suggestions(error_list)
             exit(1)
     except Exception as e:
         print(f"Exception occurred: {e}")
+        # Clear cache on error as well
+        config_manager.clear_connection_cache()
         exit(1)
+
+def _clear_cache_if_last_hook(config_manager, configured_hooks, current_language):
+    """Clear connection cache if this is the last hook to execute."""
+    if not configured_hooks:
+        return
+   
+    # Check if current language is the last in the configured hooks list
+    if current_language == configured_hooks[-1]:
+        config_manager.clear_connection_cache()
 
 
 if __name__ == "__main__":

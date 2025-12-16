@@ -27,10 +27,10 @@ fi
             f.write(hook_content)
 
         # Make the file executable
-        os.chmod(hook_path, 0o755)
-
+        os.chmod(hook_path, 0o744)
+        print("prepare-commit-msg hook installed successfully.")
     except Exception as e:
-        print(f"Audit hook installation failed: {e}")
+        print(f"Failed to install hook: {e}")
 
 if __name__ == "__main__":
     main()

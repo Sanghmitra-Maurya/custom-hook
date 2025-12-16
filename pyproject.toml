@@ -7,9 +7,12 @@ name = "custom-hooks"
 version = "0.1.0"
 description = "SonarQube pre-commit hook"
 requires-python = ">=3.7"
-dependencies = ["requests","huggingface_hub","cryptography","openai","keyboard"]
+dependencies = ["requests","cryptography","keyboard","pydocstyle","PyYaml"]
 
 [project.scripts]
+pydocstyle = "hooks.pydocstyle:main"
+trailing-whitespace = "hooks.trailing_whitespace:main"
+end-of-file-fixer = "hooks.end_of_file_fixer:main"
 check-sonar-quality-gate = "hooks.sonar_checks:main"
 audit-setup = "hooks.audit_setup:main"
 aqd-review = "hooks.aqd_review:main"
