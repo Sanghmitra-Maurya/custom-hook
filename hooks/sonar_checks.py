@@ -243,17 +243,36 @@ class SonarQubeCheck:
         resp = requests.get(qg_url, auth=(self._get_auth_token(), ""), timeout=30)
 
         if resp.status_code == 200:
+            project_status = resp.json()['projectStatus']
             status = resp.json()['projectStatus']['status']
             print(f"\nQuality Gate Status: {status}")
-            return status
+            
+            failed_conditions = []
+            if status == "ERROR":
+                 conditions = project_status.get('conditions', [])
+                 if conditions:
+                    for idx, condition in enumerate(conditions, start=1):
+                        if condition.get('status') == "ERROR":
+                            metric = condition.get('metricKey', 'N/A')
+                            actual = condition.get('actualValue', 'N/A')
+                            error_threshold = condition.get('errorThreshold', 'N/A')
+                            comparator = condition.get('comparator', 'GT')
+                            op = ">" if comparator == "GT" else "<" if comparator == "LT" else comparator
+
+                            failed_conditions.append({
+                                "metric": metric,
+                                "actual": actual,
+                                "threshold": error_threshold,
+                                "comparator": op
+                                })
+
+            return status, failed_conditions
         else:
             print("\nFailed to fetch quality gate status.")
-            return
-   
-
+            return None, []
    
     # 6. Generate JSON report for UI
-    def generate_json_report(self, qg_status, configured_hooks):
+    def generate_json_report(self, qg_status,failed_conditions,configured_hooks):
         report_file = "sonar-result.json"
        
         # Only generate report if current language is in configured hooks
@@ -285,7 +304,8 @@ class SonarQubeCheck:
         existing_report["languages"][self.language] = {
             "status": "success" if qg_status == "OK" else "failed",
             "issues": self.issue_counts,
-            "security_hotspots": self.hospots_count
+            "security_hotspots": self.hospots_count,
+            "quality_gate_failures": failed_conditions if qg_status != "OK" else []
         }
        
         # Write updated report
@@ -340,8 +360,8 @@ def main():
         error_list = sonar.fetch_issues()
         sonar.fetch_hotspots()
 
-        qg_status = sonar.fetch_quality_gate_status()
-        sonar.generate_json_report(qg_status, config['configured_hooks'])
+        qg_status, failed_conditions = sonar.fetch_quality_gate_status()
+        sonar.generate_json_report(qg_status,failed_conditions, config['configured_hooks'])
 
         with open(".git/.sonar_task_status", "w") as f:
             f.write(f"{ce_task_id}:{qg_status}")
