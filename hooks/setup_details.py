@@ -3,8 +3,8 @@ import hashlib
 from cryptography.fernet import Fernet
 import base64
 
-DEFAULT_KEY = b"1toMVVmg7zuX8p74L7rlvljHw-dsLAdD0KvzlmxjZSs="
-ENCRYPTED_SONAR = b"gAAAAABoyk25aRwPrw0MVSlI8A44vX8DvcZwyCifINkhQuT5zZN0dN-ZdCzXRP7P7yAyvlroqfz87RBVLxq-B2vrysUfvMYgR0MpHKk8hrLMfdJPURk_j1cbk38TKc-RFpIsbYpzOcqO"
+DEFAULT_KEY = b"2FNrAq6zbj0jXILjO94Ty3yhs_haF6PFs0_uChMUVkQ="
+ENCRYPTED_SONAR = b"gAAAAABouT8kyOmgZ1XGt4ttgFWjoWN5bbcQ14MZ9dphi4q3Js7rrIArOMhIb1LGXl77tpcHG1qX9m1miSIDijX4OqY8GZPeyfgQNiIcpbP-Q5wnvK3O9F-ljychZbaD-2cDjpIHKMWw"
 
 def _generate_key() -> bytes:
     """Generate consistent Fernet key from machine-specific data."""

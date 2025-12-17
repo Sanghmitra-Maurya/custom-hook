@@ -11,8 +11,8 @@ class SonarConfig:
     """Handles SonarQube configuration loading and validation."""
    
     # Configuration constants
-    DEFAULT_HOST = "https://sonar.com"
-    DEFAULT_PROJECT_KEY = "AQD"
+    DEFAULT_HOST = "http://localhost:9000"
+    DEFAULT_PROJECT_KEY = "code-enforser-demo"
     REQUIRED_KEYS = ["sonar.host.url", "sonar.projectKey"]
     TOKEN_KEYS = ["sonar.login", "sonar.token"]
    
