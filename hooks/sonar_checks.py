@@ -6,7 +6,7 @@ import re
 import os
 import yaml
 from hooks.setup_details import get_decrypted_tokens
-from hooks.language_config import get_language_config, get_supported_languages
+from hooks.language_config import get_language_config, get_supported_languages, find_coverage_file
 
 class SonarQubeCheck:
     def __init__(self, host, project_key, encrypted_token, language="project-default", sonar_config=None):
@@ -63,6 +63,14 @@ class SonarQubeCheck:
             cmd.append(f"-Dsonar.test.inclusions={test_inclusions}")
        
         coverage_path = self._get_coverage_path()
+        if not coverage_path or not os.path.exists(coverage_path):
+        # Try to find coverage file if not specified or doesn't exist
+            for lang in get_supported_languages():
+                found_path = find_coverage_file(lang)
+                if found_path:
+                    coverage_path = found_path
+                    break
+
         if coverage_path and os.path.exists(coverage_path):
             coverage_key = self._get_coverage_property_key()
             if coverage_key:
@@ -73,11 +81,12 @@ class SonarQubeCheck:
         cmd.extend([
             "-Dsonar.sources=.",
             f"-Dsonar.exclusions={self.lang_config['exclusions']}",
-            f"-Dsonar.inclusions={self.lang_config['inclusions']}"
+            f"-Dsonar.inclusions={self.lang_config['inclusions']}",
+            f"-Dsonar.test.inclusions={self.lang_config['test_paths']}"
         ])
        
-        coverage_path = self.lang_config['coverage_paths']
-        if coverage_path and os.path.exists(coverage_path):
+        coverage_path = find_coverage_file(self.language)
+        if coverage_path:
             coverage_map = {
                 "python": f"-Dsonar.python.coverage.reportPaths={coverage_path}",
                 "javascript": f"-Dsonar.javascript.lcov.reportPaths={coverage_path}",

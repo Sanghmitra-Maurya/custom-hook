@@ -1,4 +1,6 @@
 """Language configuration for SonarQube analysis."""
+import os
+import glob
 
 LANGUAGE_CONFIGS = {
     "python": {
@@ -34,3 +36,17 @@ def get_language_config(language):
 def get_supported_languages():
     """Get list of supported languages."""
     return list(LANGUAGE_CONFIGS.keys())
+
+def find_coverage_file(language, base_path="."):
+    """Find coverage file anywhere in the project."""
+    config = LANGUAGE_CONFIGS.get(language.lower(), LANGUAGE_CONFIGS["python"])
+    coverage_filename = os.path.basename(config['coverage_paths'])
+
+    # Search recursively for the coverage file
+    for root, dirs, files in os.walk(base_path):
+        # Skip common directories
+        dirs[:] = [d for d in dirs if d not in ['node_modules', 'venv', '__pycache__', '.git']]
+        if coverage_filename in files:
+            return os.path.join(root, coverage_filename)
+
+   
