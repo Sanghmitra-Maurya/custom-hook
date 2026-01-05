@@ -27,7 +27,7 @@ class SonarQubeCheck:
         print(f"Running SonarScanner for {self.language}")
 
         token = decrypt_token(self.auth.token)
-
+        print(f"Token source: {self.auth.source}")
         cmd = [
             "sonar-scanner.bat",
             f"-Dsonar.projectKey={self.project_key}",
