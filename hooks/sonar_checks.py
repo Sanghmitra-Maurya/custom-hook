@@ -334,6 +334,8 @@ def main():
     if not sonar_token:
         print("SONAR_TOKEN not found in environment.")
         exit(1)
+    
+    print(f"Using token from environment: {sonar_token[:8]}...")
 
     # Get language from command line args or default to "default"
     language = "project-default"  # project-default hook
