@@ -88,11 +88,16 @@ class SonarConfig:
     def _find_first_complete_config(self, files: List[str]) -> Dict[str, str]:
         """Find first complete configuration, stopping when found."""
         print("\nChecking configuration completeness:")
+        
+        # Get environment token for completeness check
+        from .setup_details import get_decrypted_tokens
+        tokens = get_decrypted_tokens()
+        env_token = tokens.get("SONAR_TOKEN", "")
        
         for config_file in files:
             config = self._parse_properties_file(config_file)
             if config:
-                is_complete, missing_items = self._check_config_completeness(config)
+                is_complete, missing_items = self._check_config_completeness(config, env_token)
                 self._print_file_status(config_file, is_complete, missing_items)
                
                 if is_complete:
@@ -158,10 +163,10 @@ class SonarConfig:
         """Check if a line is a valid property line."""
         return line and not line.startswith("#") and "=" in line
    
-    def _check_config_completeness(self, config: Dict[str, str]) -> Tuple[bool, List[str]]:
+    def _check_config_completeness(self, config: Dict[str, str], env_token: str = "") -> Tuple[bool, List[str]]:
         """Check configuration completeness and return missing items."""
         missing = self._get_missing_required_keys(config)
-        missing.extend(self._get_missing_auth_keys(config))
+        missing.extend(self._get_missing_auth_keys(config, env_token))
        
         return len(missing) == 0, missing
    
@@ -169,8 +174,13 @@ class SonarConfig:
         """Get list of missing required configuration keys."""
         return [key for key in self.REQUIRED_KEYS if key not in config]
    
-    def _get_missing_auth_keys(self, config: Dict[str, str]) -> List[str]:
+    def _get_missing_auth_keys(self, config: Dict[str, str], env_token: str = "") -> List[str]:
         """Get list of missing authentication keys."""
+        # Check if environment token is available
+        if env_token:
+            return []
+        
+        # Check if any token key exists in config
         if not any(key in config for key in self.TOKEN_KEYS):
             return ["authentication (sonar.login or sonar.token)"]
         return []
@@ -196,17 +206,19 @@ class SonarConfig:
        
         # Environment token takes precedence
         if env_token:
-            self.defaults_used.append("Using token from environment")
+            self.defaults_used.append(f"Using token from environment: {env_token[:8]}...")
             return encrypt_token(env_token)
        
         # Fall back to config file token
         if "sonar.token" in config:
-            self.defaults_used.append("Using sonar.token from properties file")
-            return encrypt_token(config["sonar.token"])
+            token_val = config["sonar.token"]
+            self.defaults_used.append(f"Using sonar.token from properties file: {token_val[:8]}...")
+            return encrypt_token(token_val)
         
         if "sonar.login" in config:
-            self.defaults_used.append("Using sonar.login from properties file")
-            return encrypt_token(config["sonar.login"])
+            login_val = config["sonar.login"]
+            self.defaults_used.append(f"Using sonar.login from properties file: {login_val[:8]}...")
+            return encrypt_token(login_val)
        
         # No token found
         self.defaults_used.append("No token found")
