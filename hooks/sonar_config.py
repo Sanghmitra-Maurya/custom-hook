@@ -2,6 +2,8 @@
 
 import yaml
 import os
+import subprocess
+import re
 from pathlib import Path
 from typing import Dict, List, Tuple
 from .sonar_cache import SonarConnectionCache
@@ -230,3 +232,18 @@ class SonarConfig:
         for default in self.defaults_used:
             print(f"   {default}")
         print()
+
+    def _get_scanner_version(self) -> int:
+        """Get SonarScanner major version, defaults to 6 if detection fails."""
+        try:
+            result = subprocess.run(
+                ["sonar-scanner", "--version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10
+            )
+            match = re.search(r"SonarScanner\s+(\d+)", result.stdout)
+            return int(match.group(1)) if match else 6
+        except Exception:
+            return 7 

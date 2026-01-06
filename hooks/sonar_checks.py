@@ -7,6 +7,7 @@ import os
 import yaml
 from hooks.setup_details import get_decrypted_tokens
 from hooks.language_config import get_language_config, get_supported_languages, find_coverage_file
+from .setup_details import decrypt_token
 
 class SonarQubeCheck:
     def __init__(self, host, project_key, encrypted_token, language="project-default", sonar_config=None):
@@ -27,7 +28,10 @@ class SonarQubeCheck:
 
     def _get_auth_token(self):
         """Decrypt token only when needed for API calls."""
-        from .setup_details import decrypt_token
+        env_token = os.getenv("SONAR_TOKEN")
+        print("===environment variable token",env_token)
+        if env_token:
+            return env_token.strip()
         return decrypt_token(self.encrypted_token)
 
     def _get_coverage_property_key(self):
@@ -99,12 +103,20 @@ class SonarQubeCheck:
     # 1. Run the analysis
     def run_analysis(self):
         print(f"Starting sonar-scanner analysis for {self.language}...")
+        scanner_major = self._get_scanner_version()
+        token = self._get_auth_token()
+        auth_arg = (
+        f"-Dsonar.token={token}"
+        if scanner_major >= 7
+        else f"-Dsonar.login={token}"
+        )
+        print(f"Using SonarScanner version: {scanner_major}")
         try:
             cmd = [
                 "sonar-scanner.bat",
                 f"-Dsonar.projectKey={self.project_key}",
                 f"-Dsonar.host.url={self.sonar_host}",
-                f"-Dsonar.login={self._get_auth_token()}"
+                auth_arg
             ]
            
             if self.language == "project-default":
