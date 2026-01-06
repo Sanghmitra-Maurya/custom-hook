@@ -30,7 +30,6 @@ class SonarQubeCheck:
     def _get_auth_token(self):
         """Decrypt token only when needed for API calls."""
         env_token = os.getenv("SONAR_TOKEN")
-        print("===environment variable token",env_token)
         if env_token:
             return env_token.strip()
         return decrypt_token(self.encrypted_token)
@@ -112,7 +111,7 @@ class SonarQubeCheck:
         if scanner_major >= 7
         else f"-Dsonar.login={token}"
         )
-        print(f"Using SonarScanner version: {scanner_major}")
+       
         try:
             cmd = [
                 "sonar-scanner.bat",
