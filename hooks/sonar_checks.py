@@ -4,10 +4,11 @@ import requests
 import time
 import re
 import os
-import yaml
+import sys
 from hooks.setup_details import get_decrypted_tokens
 from hooks.language_config import get_language_config, get_supported_languages, find_coverage_file
 from .setup_details import decrypt_token
+from .sonar_config import SonarConfig
 
 class SonarQubeCheck:
     def __init__(self, host, project_key, encrypted_token, language="project-default", sonar_config=None):
@@ -103,7 +104,8 @@ class SonarQubeCheck:
     # 1. Run the analysis
     def run_analysis(self):
         print(f"Starting sonar-scanner analysis for {self.language}...")
-        scanner_major = self._get_scanner_version()
+        config_manager = SonarConfig()
+        scanner_major = config_manager._get_scanner_version()
         token = self._get_auth_token()
         auth_arg = (
         f"-Dsonar.token={token}"
@@ -336,9 +338,6 @@ class SonarQubeCheck:
         return existing_report
 
 def main():
-    import sys
-    from .sonar_config import SonarConfig
-   
     tokens = get_decrypted_tokens()
     sonar_token = tokens["SONAR_TOKEN"]
     if not sonar_token:
